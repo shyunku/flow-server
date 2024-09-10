@@ -127,6 +127,7 @@ class SessionService {
     const { default: publicIp } = await import("public-ip");
 
     const address = process.env.IS_LOCAL ? "127.0.0.1" : publicIp.publicIpv4();
+    console.debug(`Announced IP: ${address}`);
 
     const transport = await room.router.createWebRtcTransport({
       listenIps: [{ ip: "0.0.0.0", announcedIp: address }], // 적절한 IP로 변경 필요
