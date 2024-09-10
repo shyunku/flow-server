@@ -1,3 +1,5 @@
+const axios = require("axios").default;
+
 module.exports = {
   generateRandomNumberCode: function (length) {
     let result = "";
