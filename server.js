@@ -33,8 +33,8 @@ const isLocal = process.env.IS_LOCAL === "true";
 let credentials;
 
 if (!isLocal) {
-  const privateKey = fs.readFileSync("/etc/letsencrypt/live/memorial.im/privkey.pem", "utf8");
-  const certificate = fs.readFileSync("/etc/letsencrypt/live/memorial.im/fullchain.pem", "utf8");
+  const privateKey = fs.readFileSync("./credentials/privkey.pem", "utf8");
+  const certificate = fs.readFileSync("./credentials/fullchain.pem", "utf8");
   credentials = { key: privateKey, cert: certificate };
 }
 
