@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require("uuid");
 const mediasoup = require("mediasoup");
+const { getPublicIpv4 } = require("../util");
 
 class SessionService {
   constructor(io) {
@@ -124,9 +125,7 @@ class SessionService {
     const room = this.rooms[roomId];
     if (!room) throw new Error(`Room ${roomId} not found`);
 
-    const { default: publicIp } = await import("public-ip");
-
-    const address = process.env.IS_LOCAL === "true" ? "127.0.0.1" : publicIp.publicIpv4();
+    const address = process.env.IS_LOCAL === "true" ? "127.0.0.1" : await getPublicIpv4();
     console.debug(`Announced IP: ${address}`);
 
     const transport = await room.router.createWebRtcTransport({
