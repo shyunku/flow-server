@@ -1,5 +1,6 @@
 const express = require("express");
 const http = require("http");
+const https = require("https");
 const socketIo = require("socket.io");
 const sfu = require("./sfu");
 const dotenv = require("dotenv");
@@ -26,8 +27,18 @@ app.use(
 );
 
 const JwtSecret = process.env.JWT_SECRET;
+const isLocal = process.env.IS_LOCAL === "true";
 
-const server = http.createServer(app);
+// SSL Credentials
+let credentials;
+
+if (!isLocal) {
+  const privateKey = fs.readFileSync("/etc/letsencrypt/live/memorial.im/privkey.pem", "utf8");
+  const certificate = fs.readFileSync("/etc/letsencrypt/live/memorial.im/fullchain.pem", "utf8");
+  credentials = { key: privateKey, cert: certificate };
+}
+
+const server = isLocal ? http.createServer(app) : https.createServer(credentials, app);
 const io = socketIo(server, {
   cors: {
     origin: "*", // 모든 출처에서의 요청 허용
@@ -90,5 +101,3 @@ app.post("/signup", async (req, res) => {
     res.status(500).json({ error: "Signup failed" });
   }
 });
-
-// sfu(io);
