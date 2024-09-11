@@ -128,44 +128,46 @@ class SessionService {
     const address = process.env.IS_LOCAL === "true" ? "127.0.0.1" : await getPublicIpv4();
     console.debug(`Announced IP: ${address}`);
 
+    const collectiveIceServers = [
+      { urls: ["stun:stun.l.google.com:19302"] },
+      {
+        url: ["turn:numb.viagenie.ca"],
+        credential: "muazkh",
+        username: "webrtc@live.com",
+      },
+      {
+        url: ["turn:192.158.29.39:3478?transport=udp"],
+        credential: "JZEOEt2V3Qb0y27GRntt2u2PAYA=",
+        username: "28224511:1379330808",
+      },
+      {
+        url: ["turn:192.158.29.39:3478?transport=tcp"],
+        credential: "JZEOEt2V3Qb0y27GRntt2u2PAYA=",
+        username: "28224511:1379330808",
+      },
+      {
+        url: ["turn:turn.bistri.com:80"],
+        credential: "homeo",
+        username: "homeo",
+      },
+      {
+        url: ["turn:turn.anyfirewall.com:443?transport=tcp"],
+        credential: "webrtc",
+        username: "webrtc",
+      },
+      {
+        urls: ["turn:13.250.13.83:3478?transport=udp"],
+        username: "YzYNCouZM1mhqhmseWk6",
+        credential: "YzYNCouZM1mhqhmseWk6",
+      },
+    ];
+
     const transport = await room.router.createWebRtcTransport({
       listenIps: [{ ip: "0.0.0.0", announcedIp: address }], // 적절한 IP로 변경 필요
       enableUdp: true,
       enableTcp: true,
       preferUdp: true,
-      iceServers: [
-        { urls: ["stun:stun.l.google.com:19302"] },
-        {
-          url: ["turn:numb.viagenie.ca"],
-          credential: "muazkh",
-          username: "webrtc@live.com",
-        },
-        {
-          url: ["turn:192.158.29.39:3478?transport=udp"],
-          credential: "JZEOEt2V3Qb0y27GRntt2u2PAYA=",
-          username: "28224511:1379330808",
-        },
-        {
-          url: ["turn:192.158.29.39:3478?transport=tcp"],
-          credential: "JZEOEt2V3Qb0y27GRntt2u2PAYA=",
-          username: "28224511:1379330808",
-        },
-        {
-          url: ["turn:turn.bistri.com:80"],
-          credential: "homeo",
-          username: "homeo",
-        },
-        {
-          url: ["turn:turn.anyfirewall.com:443?transport=tcp"],
-          credential: "webrtc",
-          username: "webrtc",
-        },
-        {
-          urls: ["turn:13.250.13.83:3478?transport=udp"],
-          username: "YzYNCouZM1mhqhmseWk6",
-          credential: "YzYNCouZM1mhqhmseWk6",
-        },
-      ],
+      iceServers: [],
     });
 
     console.debug(`WebRTC Transport ${direction} created for room ${roomId}, transport ID: ${transport.id}`);
