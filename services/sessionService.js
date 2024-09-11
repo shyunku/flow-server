@@ -40,7 +40,7 @@ class SessionService {
         mimeType: "video/VP8",
         clockRate: 90000,
         parameters: {
-          "x-google-start-bitrate": 1000,
+          "x-google-start-bitrate": 10000,
         },
       },
     ];
