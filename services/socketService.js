@@ -62,7 +62,7 @@ class SocketService {
 
         // leave rooms
         if (socket?.user?.uid) {
-          this.sessionService.leave(socket.user.uid);
+          this.sessionService.leave(socket.user);
         }
       });
 
@@ -89,7 +89,7 @@ class SocketService {
 
           const room = this.sessionService.getRoom(roomId);
           socket.join(roomId);
-          this.sessionService.join(roomId, socket.user.uid);
+          this.sessionService.join(roomId, socket.user);
           console.debug(`User ${socket.user.nickname} joined room ${roomId}`);
           callback(true);
 

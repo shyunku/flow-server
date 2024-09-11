@@ -81,18 +81,25 @@ class SessionService {
     console.info(`Room ${roomId} has been closed and resources have been released.`);
   }
 
-  async join(roomId, uid) {
+  async join(roomId, user) {
     const room = this.getRoom(roomId);
+    const { uid, nickname } = user;
     room.participants.add(uid);
-    console.info(`User ${uid} joined session ${roomId}`);
+    console.info(`User ${nickname} joined session ${roomId}`);
+
+    this.io.to(roomId).emit("userJoined", { nickname, uid });
   }
 
-  async leave(uid) {
+  async leave(user) {
+    const { uid, nickname } = user;
+
     for (const roomId in this.rooms) {
       const room = this.rooms[roomId];
       if (room.participants.has(uid)) {
         room.participants.delete(uid);
-        console.info(`User ${uid} left session ${roomId}`);
+        console.info(`User ${nickname} left session ${roomId}`);
+
+        this.io.to(roomId).emit("userLeft", { uid, nickname });
       }
     }
 
