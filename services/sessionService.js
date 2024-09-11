@@ -16,8 +16,8 @@ class SessionService {
 
   async createRoom(roomId, creatorUid) {
     if (this.rooms[roomId]) {
-      console.error("Room already exists");
-      return null;
+      console.warn("Room already exists");
+      return this.rooms[roomId];
     }
 
     const worker = await mediasoup.createWorker({
@@ -93,18 +93,26 @@ class SessionService {
       if (room.participants.has(uid)) {
         room.participants.delete(uid);
         console.info(`User ${uid} left session ${roomId}`);
-
-        const isHost = room.creatorUid === uid;
-        if (isHost) {
-          // expel
-          this.io.to(roomId).emit("sessionClosed");
-          console.info(`Room ${roomId} has been closed by host ${uid}`);
-          await this.closeRoom(roomId);
-        }
       }
     }
 
-    await this.cleanEmptyRooms();
+    setTimeout(async () => {
+      await this.cleanNoHostRooms();
+      await this.cleanEmptyRooms();
+    }, 3000);
+  }
+
+  async cleanNoHostRooms() {
+    for (const roomId in this.rooms) {
+      const room = this.rooms[roomId];
+      if (!room.participants.has(room.creatorUid)) {
+        await this.closeRoom(roomId);
+        console.info(`Room ${roomId} has been closed by host ${room.creatorUid}`);
+
+        // broadcast
+        this.io.to(roomId).emit("sessionClosed");
+      }
+    }
   }
 
   async cleanEmptyRooms() {
@@ -112,6 +120,7 @@ class SessionService {
       const room = this.rooms[roomId];
       if (room.participants.size === 0) {
         await this.closeRoom(roomId);
+        console.info(`Room ${roomId} has been closed due to inactivity`);
       }
     }
   }

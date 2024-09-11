@@ -76,6 +76,7 @@ class SocketService {
 
         const roomId = util.generateRandomNumberCode(6);
         const room = await this.sessionService.createRoom(roomId, socket.user.uid);
+        console.info(`Room ${roomId} created by ${socket.user.nickname}`);
         callback(roomId);
       });
 
