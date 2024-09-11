@@ -90,7 +90,6 @@ class SocketService {
           const room = this.sessionService.getRoom(roomId);
           socket.join(roomId);
           this.sessionService.join(roomId, socket.user);
-          console.debug(`User ${socket.user.nickname} joined room ${roomId}`);
           callback(true);
 
           socket.emit("router-rtp-capabilities", room.router.rtpCapabilities);
@@ -107,7 +106,7 @@ class SocketService {
         }
 
         socket.leave(roomId);
-        console.log(`User ${socket.user.nickname} left room ${roomId}`);
+        this.sessionService.leave(socket.user);
       });
 
       socket.on("chat", (roomId, message) => {
@@ -145,7 +144,7 @@ class SocketService {
             return;
           }
 
-          const transport = await this.sessionService.createWebRtcTransport(socket.user.uid, sessionId, direction);
+          const transport = await this.sessionService.createWebRtcTransport(socket.user, sessionId, direction);
           callback({
             params: {
               id: transport.id,
@@ -157,8 +156,8 @@ class SocketService {
 
           if (direction === "recv") {
             // notify existing producer
-            const producer = this.sessionService.getExistingProducer(sessionId);
-            if (producer) {
+            const producers = this.sessionService.getExistingProducers(sessionId);
+            for (const producer of producers) {
               socket.emit("new-producer", { producerId: producer.id, kind: producer.kind });
             }
           }
@@ -175,7 +174,7 @@ class SocketService {
             return;
           }
 
-          await this.sessionService.connectWebRtcTransport(socket.user.uid, sessionId, transportId, dtlsParameters);
+          await this.sessionService.connectWebRtcTransport(socket.user, sessionId, transportId, dtlsParameters);
           callback();
         } catch (error) {
           console.error("Error connecting transport:", error);
@@ -190,13 +189,7 @@ class SocketService {
             return;
           }
 
-          const producer = await this.sessionService.produce(
-            socket.user.uid,
-            sessionId,
-            transportId,
-            kind,
-            rtpParameters
-          );
+          const producer = await this.sessionService.produce(socket.user, sessionId, transportId, kind, rtpParameters);
           callback({ id: producer.id });
 
           // notify other clients
@@ -214,7 +207,7 @@ class SocketService {
             return;
           }
 
-          const consumer = await this.sessionService.consume(socket.user.uid, sessionId, producerId, rtpCapabilities);
+          const consumer = await this.sessionService.consume(socket.user, sessionId, producerId, rtpCapabilities);
           callback({ id: consumer.id, producerId, kind: consumer.kind, rtpParameters: consumer.rtpParameters });
         } catch (error) {
           console.error("Error consuming:", error);

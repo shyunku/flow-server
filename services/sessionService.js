@@ -34,13 +34,20 @@ class SessionService {
         mimeType: "audio/opus",
         clockRate: 48000,
         channels: 2,
+        parameters: {
+          maxplaybackrate: 48000,
+          stereo: 1,
+          useinbandfec: 1,
+          usedtx: 0,
+          maxaveragebitrate: 128000,
+        },
       },
       {
         kind: "video",
         mimeType: "video/VP8",
         clockRate: 90000,
         parameters: {
-          "x-google-start-bitrate": 10000,
+          "x-google-start-bitrate": 5000,
         },
       },
     ];
@@ -85,7 +92,7 @@ class SessionService {
     const room = this.getRoom(roomId);
     const { uid, nickname } = user;
     room.participants.add(uid);
-    console.info(`User ${nickname} joined session ${roomId}`);
+    console.info(`[Room-${roomId}] ${nickname}: joined the room`);
 
     this.io.to(roomId).emit("userJoined", { nickname, uid });
   }
@@ -97,7 +104,8 @@ class SessionService {
       const room = this.rooms[roomId];
       if (room.participants.has(uid)) {
         room.participants.delete(uid);
-        console.info(`User ${nickname} left session ${roomId}`);
+        this.clearUserData(user);
+        console.info(`[Room-${roomId}] ${nickname}: left the room`);
 
         this.io.to(roomId).emit("userLeft", { uid, nickname });
       }
@@ -109,12 +117,47 @@ class SessionService {
     }, 3000);
   }
 
+  async clearUserData(user) {
+    const { uid, nickname } = user;
+
+    for (const roomId in this.rooms) {
+      const room = this.rooms[roomId];
+
+      // clear transports
+      for (const transport of room.transports) {
+        if (transport.uid === uid) {
+          await transport.transport.close();
+          console.debug(`[Room-${roomId}] ${nickname}: transport(${transport.direction}) closed`);
+        }
+      }
+      room.transports = room.transports.filter((t) => t.uid !== uid);
+
+      // clear producers
+      for (const producer of room.producers) {
+        if (producer.uid === uid) {
+          await producer.producer.close();
+          console.debug(`[Room-${roomId}] ${nickname}: producer(${producer.kind}) closed`);
+        }
+      }
+      room.producers = room.producers.filter((p) => p.uid !== uid);
+
+      // clear consumers
+      for (const consumer of room.consumers) {
+        if (consumer.uid === uid) {
+          await consumer.consumer.close();
+          console.debug(`[Room-${roomId}] ${nickname}: consumer(${consumer.kind}) closed`);
+        }
+      }
+      room.consumers = room.consumers.filter((c) => c.uid !== uid);
+    }
+  }
+
   async cleanNoHostRooms() {
     for (const roomId in this.rooms) {
       const room = this.rooms[roomId];
       if (!room.participants.has(room.creatorUid)) {
         await this.closeRoom(roomId);
-        console.info(`Room ${roomId} has been closed by host ${room.creatorUid}`);
+        console.info(`[Room-${roomId}] has been closed by host ${room.creatorUid}`);
 
         // broadcast
         this.io.to(roomId).emit("sessionClosed");
@@ -127,27 +170,24 @@ class SessionService {
       const room = this.rooms[roomId];
       if (room.participants.size === 0) {
         await this.closeRoom(roomId);
-        console.info(`Room ${roomId} has been closed due to inactivity`);
+        console.info(`[Room-${roomId}] closed due to inactivity`);
       }
     }
   }
 
-  getExistingProducer(roomId) {
+  getExistingProducers(roomId) {
     const room = this.getRoom(roomId);
-    if (room.producers.length === 0) {
-      return null;
-    }
-
-    return room.producers[0];
+    return room.producers;
   }
 
   // WebRTC Transport 생성
-  async createWebRtcTransport(uid, roomId, direction) {
+  async createWebRtcTransport(user, roomId, direction) {
+    const { uid, nickname } = user;
     const room = this.rooms[roomId];
     if (!room) throw new Error(`Room ${roomId} not found`);
 
     const address = process.env.IS_LOCAL === "true" ? "127.0.0.1" : await getPublicIpv4();
-    console.debug(`Announced IP: ${address}`);
+    // console.debug(`Announced IP: ${address}`);
 
     const collectiveIceServers = [
       { urls: ["stun:stun.l.google.com:19302"] },
@@ -191,7 +231,7 @@ class SessionService {
       iceServers: [],
     });
 
-    console.debug(`WebRTC Transport ${direction} created for room ${roomId}, transport ID: ${transport.id}`);
+    console.debug(`[Room-${roomId}] ${nickname}: transport(${direction}) created as id: ${transport.id}`);
     room.transports.push({ uid, transport, direction });
 
     return transport;
@@ -207,7 +247,8 @@ class SessionService {
     return producer.rtpParameters;
   }
 
-  async connectWebRtcTransport(uid, roomId, transportId, dtlsParameters) {
+  async connectWebRtcTransport(user, roomId, transportId, dtlsParameters) {
+    const { uid, nickname } = user;
     const room = this.getRoom(roomId);
     const transport = room.transports.find((t) => t.uid === uid && t.transport.id === transportId);
     if (!transport) {
@@ -215,10 +256,11 @@ class SessionService {
     }
 
     await transport.transport.connect({ dtlsParameters });
-    console.debug(`WebRTC Transport connected: ${transportId}`);
+    console.debug(`[Room-${roomId}] ${nickname}: transport(${transport.direction}) connected`);
   }
 
-  async produce(uid, roomId, transportId, kind, rtpParameters) {
+  async produce(user, roomId, transportId, kind, rtpParameters) {
+    const { uid, nickname } = user;
     const room = this.getRoom(roomId);
     const transport = room.transports.find((t) => t.uid === uid && t.transport.id === transportId);
     if (!transport) {
@@ -228,29 +270,38 @@ class SessionService {
     const producer = await transport.transport.produce({ kind, rtpParameters });
     room.producers.push({ uid, producer, id: producer.id, rtpParameters, kind });
 
-    console.debug(`Producer ${producer.id} created for room ${roomId}`);
+    console.debug(`[Room-${roomId}] ${nickname}: producer(${kind}) created as id: ${producer.id}`);
     return producer;
   }
 
-  async consume(uid, roomId, producerId, rtpCapabilities) {
+  async consume(user, roomId, producerId, rtpCapabilities) {
+    const { uid, nickname } = user;
     const room = this.getRoom(roomId);
-    const consumerTransport = room.transports.find((t) => t.uid === uid && t.direction === "recv")?.transport;
-    if (!consumerTransport) {
+    const transport = room.transports.find((t) => t.uid === uid && t.direction === "recv");
+    if (!transport) {
       throw new Error(`Consumer transport for ${uid}/${producerId} not found`);
+    }
+
+    const producer = room.producers.find((p) => p.id === producerId);
+    if (!producer) {
+      throw new Error(`Producer ${producerId} not found`);
     }
 
     if (!room.router.canConsume({ producerId, rtpCapabilities })) {
       throw new Error(`Cannot consume ${producerId}`);
     }
 
-    const consumer = await consumerTransport.consume({
+    const consumer = await transport.transport.consume({
       producerId,
       rtpCapabilities,
       paused: false,
     });
 
-    room.consumers.push({ uid, consumer, producerId });
-    console.log(`Consumer ${consumer.id} created for room ${roomId}`);
+    room.consumers.push({ uid, consumer, producerId, kind: producer.kind });
+    console.debug(`[Room-${roomId}] ${nickname}: consumer(${producer.kind}) created as id: ${consumer.id}`);
+
+    await consumer.resume();
+
     return consumer;
   }
 }

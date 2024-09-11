@@ -101,3 +101,20 @@ app.post("/signup", async (req, res) => {
     res.status(500).json({ error: "Signup failed" });
   }
 });
+
+app.post("/tokenTest", async (req, res) => {
+  try {
+    const { token } = req.body;
+    console.log(token);
+    jwt.verify(token, JwtSecret, (err, decoded) => {
+      if (err) {
+        console.error("Token verification failed:", err);
+        return res.status(401).json({ error: "Invalid token" });
+      }
+      res.json(decoded);
+    });
+  } catch (err) {
+    console.error("Token verification failed:", err);
+    res.status(500).json({ error: "Token verification failed" });
+  }
+});
