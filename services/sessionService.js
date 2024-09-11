@@ -180,6 +180,11 @@ class SessionService {
     return room.producers;
   }
 
+  getParticipants(roomId) {
+    const room = this.getRoom(roomId);
+    return Array.from(room.participants);
+  }
+
   // WebRTC Transport 생성
   async createWebRtcTransport(user, roomId, direction) {
     const { uid, nickname } = user;

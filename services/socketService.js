@@ -160,6 +160,14 @@ class SocketService {
             for (const producer of producers) {
               socket.emit("new-producer", { producerId: producer.id, kind: producer.kind });
             }
+
+            const participants = this.sessionService.getParticipants(sessionId);
+            socket.emit(
+              "participants",
+              participants.map((p) => {
+                return { uid: p.uid, nickname: p.nickname };
+              })
+            );
           }
         } catch (error) {
           console.error("Error creating transport:", error);
