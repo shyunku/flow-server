@@ -20,7 +20,12 @@ class SessionService {
       return null;
     }
 
-    const worker = await mediasoup.createWorker();
+    const worker = await mediasoup.createWorker({
+      logLevel: "debug",
+      logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
+      rtcMinPort: 40000,
+      rtcMaxPort: 49999,
+    });
     console.info("Mediasoup Worker created for room", roomId);
 
     const mediaCodecs = [
