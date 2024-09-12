@@ -1,6 +1,8 @@
 const { v4: uuidv4 } = require("uuid");
 const mediasoup = require("mediasoup");
 const { getPublicIpv4 } = require("../util");
+const childProcess = require("child_process");
+const fs = require("fs");
 
 class SessionService {
   constructor(io) {
@@ -14,7 +16,8 @@ class SessionService {
     this.socketService = socketService;
   }
 
-  async createRoom(roomId, creatorUid) {
+  async createRoom(roomId, creator) {
+    const { uid: creatorUid, nickname: creatorName } = creator;
     if (this.rooms[roomId]) {
       console.warn("Room already exists");
       return this.rooms[roomId];
@@ -52,15 +55,60 @@ class SessionService {
       },
     ];
 
+    // create image path
+    const imageDirpath = `public/thumbnails`;
+    if (!fs.existsSync(imageDirpath)) {
+      fs.mkdirSync(imageDirpath, { recursive: true });
+    }
+    const imagePath = `${imageDirpath}/${roomId}.jpg`;
+
+    const captureId = setInterval(() => {
+      const room = this.rooms[roomId];
+      if (!room) return;
+      const transports = room.transports.filter((t) => t.direction === "send");
+      if (transports.length === 0) return;
+      const transport = transports[0];
+
+      if (transport) {
+        // consume video
+        // const rtpPort = transport.transport.tuple.localPort;
+        // console.log(rtpPort)
+        // const ffmpegProcess = childProcess.spawn("ffmpeg", [
+        //   "-protocol_whitelist",
+        //   "file,udp,rtp",
+        //   "-i",
+        //   `rtp://127.0.0.1:${rtpPort}`,
+        //   "-frames:v",
+        //   "1",
+        //   "-q:v",
+        //   "2",
+        //   imagePath,
+        // ]);
+        // ffmpegProcess.stderr.on("data", (data) => {
+        //   console.error(`[Room-${roomId}] Thumbnail capture error: ${data}`);
+        // });
+        // ffmpegProcess.on("close", (code) => {
+        //   if (code === 0) {
+        //     console.debug(`[Room-${roomId}] Thumbnail captured: ${imagePath}`);
+        //   } else {
+        //     console.error(`[Room-${roomId}] Thumbnail capture failed (${code}): ${imagePath}`);
+        //   }
+        // });
+      }
+    }, 5000);
+
     const router = await worker.createRouter({ mediaCodecs });
     const room = {
       creatorUid,
+      creatorName,
+      name: `${creatorName}의 방송`,
       worker,
       router,
       transports: [],
       producers: [],
       consumers: [],
-      participants: new Set(),
+      participants: new Map(),
+      captureId,
     };
 
     this.rooms[roomId] = room;
@@ -85,13 +133,15 @@ class SessionService {
     room.worker.close();
 
     delete this.rooms[roomId];
+
+    clearInterval(room.captureId);
     console.info(`Room ${roomId} has been closed and resources have been released.`);
   }
 
   async join(roomId, user) {
     const room = this.getRoom(roomId);
     const { uid, nickname } = user;
-    room.participants.add(uid);
+    room.participants.set(uid, user);
     console.info(`[Room-${roomId}] ${nickname}: joined the room`);
 
     this.io.to(roomId).emit("userJoined", { nickname, uid });
@@ -182,7 +232,41 @@ class SessionService {
 
   getParticipants(roomId) {
     const room = this.getRoom(roomId);
-    return Array.from(room.participants);
+    return Array.from(room.participants.values());
+  }
+
+  getRoomName(roomId) {
+    const room = this.getRoom(roomId);
+    return room.name;
+  }
+
+  setRoomName(roomId, user, rawName) {
+    const room = this.getRoom(roomId);
+    if (user.uid !== room.creatorUid) return;
+    const name = rawName.trim().substring(0, 50);
+    if (name.length === 0) return;
+    room.name = name;
+
+    this.io.to(roomId).emit("roomName", room.name);
+  }
+
+  getRooms() {
+    return Object.keys(this.rooms).map((roomId) => {
+      const room = this.rooms[roomId];
+      return {
+        roomId,
+        name: room.name,
+        creatorUid: room.creatorUid,
+        creatorName: room.creatorName,
+        participants: Array.from(room.participants),
+        watchers: Array.from(room.participants).filter((uid) => uid !== room.creatorUid),
+      };
+    });
+  }
+
+  async getPublicAddress() {
+    const address = process.env.IS_LOCAL === "true" ? "127.0.0.1" : await getPublicIpv4();
+    return address;
   }
 
   // WebRTC Transport 생성
@@ -191,7 +275,7 @@ class SessionService {
     const room = this.rooms[roomId];
     if (!room) throw new Error(`Room ${roomId} not found`);
 
-    const address = process.env.IS_LOCAL === "true" ? "127.0.0.1" : await getPublicIpv4();
+    const address = await this.getPublicAddress();
     // console.debug(`Announced IP: ${address}`);
 
     const collectiveIceServers = [

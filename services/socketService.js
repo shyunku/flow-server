@@ -75,7 +75,7 @@ class SocketService {
         }
 
         const roomId = util.generateRandomNumberCode(6);
-        const room = await this.sessionService.createRoom(roomId, socket.user.uid);
+        const room = await this.sessionService.createRoom(roomId, socket.user);
         console.info(`Room ${roomId} created by ${socket.user.nickname}`);
         callback(roomId);
       });
@@ -117,6 +117,15 @@ class SocketService {
 
         const user = socket.user;
         this.io.to(roomId).emit("chat", { uid: user.uid, nickname: user.nickname, message });
+      });
+
+      socket.on("setRoomName", (roomId, roomName) => {
+        if (!socket.user) {
+          console.error("User not authenticated");
+          return;
+        }
+
+        this.sessionService.setRoomName(roomId, socket.user, roomName);
       });
 
       /* ------------------------ Transports ------------------------ */
@@ -168,6 +177,7 @@ class SocketService {
                 return { uid: p.uid, nickname: p.nickname };
               })
             );
+            socket.emit("roomName", this.sessionService.getRoomName(sessionId));
           }
         } catch (error) {
           console.error("Error creating transport:", error);

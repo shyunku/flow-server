@@ -118,3 +118,13 @@ app.post("/tokenTest", async (req, res) => {
     res.status(500).json({ error: "Token verification failed" });
   }
 });
+
+app.get("/rooms", async (req, res) => {
+  try {
+    const rooms = sessionService.getRooms();
+    res.json(rooms);
+  } catch (err) {
+    console.error("Get rooms failed:", err);
+    res.status(500).json({ error: "Get rooms failed" });
+  }
+});
